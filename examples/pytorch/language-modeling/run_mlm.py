@@ -122,6 +122,9 @@ class DataTrainingArguments:
     Arguments pertaining to what data we are going to input our model for training and eval.
     """
 
+    data_cache_dir: str = field(
+        default=None, metadata={"help": "Path to data cache."},
+    )
     dataset_name: Optional[str] = field(
         default=None, metadata={"help": "The name of the dataset to use (via the datasets library)."}
     )
@@ -220,6 +223,8 @@ def main():
     transformers.utils.logging.set_verbosity(log_level)
     transformers.utils.logging.enable_default_handler()
     transformers.utils.logging.enable_explicit_format()
+
+    assert data_args.data_cache_dir is not None, "You need to specify a data cache directory."
 
     # Log on each process the small summary:
     logger.warning(
@@ -420,6 +425,7 @@ def main():
                 tokenize_function,
                 batched=True,
                 num_proc=data_args.preprocessing_num_workers,
+                cache_file_names={k: os.path.join(data_args.data_cache_dir, f'{k}-tokenized') for k in datasets},
                 remove_columns=column_names,
                 load_from_cache_file=not data_args.overwrite_cache,
                 desc="Running tokenizer on every text in dataset",
@@ -454,6 +460,7 @@ def main():
                 group_texts,
                 batched=True,
                 num_proc=data_args.preprocessing_num_workers,
+                cache_file_names={k: os.path.join(data_args.data_cache_dir, f'{k}-grouped') for k in datasets},
                 load_from_cache_file=not data_args.overwrite_cache,
                 desc=f"Grouping texts in chunks of {max_seq_length}",
             )
