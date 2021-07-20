@@ -187,7 +187,7 @@ logger = logging.get_logger(__name__)
 
 def send_cpu_data_to_device(data, device):
     logger.info(f"Inside send_cpu_data_to_device...")
-    def convert_fn(tensors, tensor_batch=10):
+    def convert_fn(tensors, tensor_batch=2):
         converted_tensors = []
 
         for i in range(0, len(tensors), tensor_batch):
