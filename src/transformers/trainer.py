@@ -316,6 +316,7 @@ class Trainer:
         # force device and distributed setup init explicitly
         args._setup_devices
 
+        logger.info(f"Starting: In Trainer():  if model is None:")
         if model is None:
             if model_init is not None:
                 self.model_init = model_init
@@ -376,15 +377,20 @@ class Trainer:
         ):
             self.place_model_on_device = False
 
+        logger.info(f"Starting: In Trainer(): {self.place_model_on_device} default_collator = default_data_collator if tokenizer is None else DataCollatorWithPadding(tokenizer)")
+
         default_collator = default_data_collator if tokenizer is None else DataCollatorWithPadding(tokenizer)
         self.data_collator = data_collator if data_collator is not None else default_collator
         self.train_dataset = train_dataset
         self.eval_dataset = eval_dataset
         self.tokenizer = tokenizer
 
+        logger.info(f"Starting: In Trainer(): if self.place_model_on_device:")
         if self.place_model_on_device:
+            logger.info(f"Starting: In Trainer(): in if self.place_model_on_device: model = model.to(args.device)")
             model = model.to(args.device)
 
+        logger.info(f"Starting: In Trainer(): if self.is_model_parallel:")
         # Force n_gpu to 1 to avoid DataParallel as MP will manage the GPUs
         if self.is_model_parallel:
             self.args._n_gpu = 1
