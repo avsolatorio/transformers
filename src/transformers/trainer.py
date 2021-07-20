@@ -150,6 +150,7 @@ if is_datasets_available():
     import datasets
 
 if is_torch_tpu_available():
+    import torch_xla
     import torch_xla.core.xla_model as xm
     import torch_xla.debug.metrics as met
     import torch_xla.distributed.parallel_loader as pl
@@ -182,6 +183,25 @@ if TYPE_CHECKING:
     import optuna
 
 logger = logging.get_logger(__name__)
+
+
+def send_cpu_data_to_device(data, device):
+    logger.info(f"Inside send_cpu_data_to_device...")
+    def convert_fn(tensors, tensor_batch=10):
+        converted_tensors = []
+
+        for i in range(0, len(tensors), tensor_batch):
+            logger.info(f"Processing tensor_batch: {i}...")
+            devices = [str(device)] * len(tensors[i: i+tensor_batch])
+            converted_tensors.extend(
+                torch_xla._XLAC._xla_tensors_from_aten(
+                    tensors[i: i+tensor_batch], devices))
+        return converted_tensors
+
+    def select_fn(v):
+        return type(v) == torch.Tensor and v.device.type == 'cpu'
+
+    return xm.ToXlaTensorArena(convert_fn, select_fn).transform(data)
 
 
 class Trainer:
@@ -1635,10 +1655,10 @@ class Trainer:
                 reissue_pt_warnings(caught_warnings)
 
                 logger.info(f"Starting: xm.send_cpu_data_to_device(lr_scheduler_state, self.args.device) : {self.args.device}")
-                xm.send_cpu_data_to_device(lr_scheduler_state, self.args.device)
+                send_cpu_data_to_device(lr_scheduler_state, self.args.device)
 
                 logger.info(f"Starting: xm.send_cpu_data_to_device(optimizer_state, self.args.device) : {self.args.device}")
-                xm.send_cpu_data_to_device(optimizer_state, self.args.device)
+                send_cpu_data_to_device(optimizer_state, self.args.device)
 
                 logger.info(f"Starting: self.optimizer.load_state_dict(optimizer_state)")
                 self.optimizer.load_state_dict(optimizer_state)
