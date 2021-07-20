@@ -371,6 +371,7 @@ def main():
             )
         max_seq_length = min(data_args.max_seq_length, tokenizer.model_max_length)
 
+    logger.info("Starting: Running tokenizer...")
     if data_args.line_by_line:
         # When using line_by_line, we just tokenize each nonempty line.
         padding = "max_length" if data_args.pad_to_max_length else False
@@ -439,6 +440,7 @@ def main():
         # To speed up this part, we use multiprocessing. See the documentation of the map method for more information:
         # https://huggingface.co/docs/datasets/package_reference/main_classes.html#datasets.Dataset.map
 
+        logger.info("Starting: Grouping texts...")
         tokenized_datasets = tokenized_datasets.map(
             group_texts,
             batched=True,
