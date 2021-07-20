@@ -121,6 +121,12 @@ class DataTrainingArguments:
     Arguments pertaining to what data we are going to input our model for training and eval.
     """
 
+    data_cache_dir: str = field(
+        default=None, metadata={"help": "Path to data cache."},
+    )
+    data_cache_key: str = field(
+        default=None, metadata={"help": "Any key that must be manually provided for each unique configuration of data."},
+    )
     dataset_name: Optional[str] = field(
         default=None, metadata={"help": "The name of the dataset to use (via the datasets library)."}
     )
@@ -205,6 +211,13 @@ def main():
         model_args, data_args, training_args = parser.parse_json_file(json_file=os.path.abspath(sys.argv[1]))
     else:
         model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+
+    assert data_args.data_cache_dir is not None, "You need to specify a data cache directory."
+    assert data_args.data_cache_key is not None, "You need to specify a data cache key."
+
+    data_cache_key_dir = os.path.join(data_args.data_cache_dir, data_args.data_cache_key)
+    if not os.path.exists(data_cache_key_dir):
+        os.makedirs(data_cache_key_dir)
 
     # Setup logging
     logging.basicConfig(
@@ -358,6 +371,7 @@ def main():
             )
         max_seq_length = min(data_args.max_seq_length, tokenizer.model_max_length)
 
+    logger.info("Starting: Running tokenizer...")
     if data_args.line_by_line:
         # When using line_by_line, we just tokenize each nonempty line.
         padding = "max_length" if data_args.pad_to_max_length else False
@@ -381,6 +395,7 @@ def main():
             tokenize_function,
             batched=True,
             num_proc=data_args.preprocessing_num_workers,
+            cache_file_names={k: os.path.join(data_cache_key_dir, f'{data_args.data_cache_key}-{k}-tokenized.arrow') for k in datasets},
             remove_columns=[text_column_name],
             load_from_cache_file=not data_args.overwrite_cache,
             desc="Running tokenizer on dataset line_by_line",
@@ -396,6 +411,7 @@ def main():
             tokenize_function,
             batched=True,
             num_proc=data_args.preprocessing_num_workers,
+            cache_file_names={k: os.path.join(data_cache_key_dir, f'{data_args.data_cache_key}-{k}-tokenized.arrow') for k in datasets},
             remove_columns=column_names,
             load_from_cache_file=not data_args.overwrite_cache,
             desc="Running tokenizer on every text in dataset",
@@ -424,10 +440,12 @@ def main():
         # To speed up this part, we use multiprocessing. See the documentation of the map method for more information:
         # https://huggingface.co/docs/datasets/package_reference/main_classes.html#datasets.Dataset.map
 
+        logger.info("Starting: Grouping texts...")
         tokenized_datasets = tokenized_datasets.map(
             group_texts,
             batched=True,
             num_proc=data_args.preprocessing_num_workers,
+            cache_file_names={k: os.path.join(data_cache_key_dir, f'{data_args.data_cache_key}-{k}-grouped.arrow') for k in datasets},
             load_from_cache_file=not data_args.overwrite_cache,
             desc=f"Grouping texts in chunks of {max_seq_length}",
         )
@@ -446,6 +464,7 @@ def main():
         if data_args.max_eval_samples is not None:
             eval_dataset = eval_dataset.select(range(data_args.max_eval_samples))
 
+    logger.info("Building DataCollatorForLanguageModeling...")
     # Data collator
     # This one will take care of randomly masking the tokens.
     pad_to_multiple_of_8 = data_args.line_by_line and training_args.fp16 and not data_args.pad_to_max_length
@@ -455,6 +474,7 @@ def main():
         pad_to_multiple_of=8 if pad_to_multiple_of_8 else None,
     )
 
+    logger.info("Building Trainer...")
     # Initialize our Trainer
     trainer = Trainer(
         model=model,
@@ -465,6 +485,7 @@ def main():
         data_collator=data_collator,
     )
 
+    logger.info("Starting: training_args.do_train...")
     # Training
     if training_args.do_train:
         checkpoint = None
@@ -472,7 +493,14 @@ def main():
             checkpoint = training_args.resume_from_checkpoint
         elif last_checkpoint is not None:
             checkpoint = last_checkpoint
+
+        if checkpoint:
+            logger.info(f"Training with checkpoint: {checkpoint}...")
+
+        logger.info("Starting: train_result = trainer.train(resume_from_checkpoint=checkpoint)")
         train_result = trainer.train(resume_from_checkpoint=checkpoint)
+
+        logger.info("Starting: trainer.save_model()")
         trainer.save_model()  # Saves the tokenizer too for easy upload
         metrics = train_result.metrics
 
