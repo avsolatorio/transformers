@@ -1634,11 +1634,11 @@ class Trainer:
                 logger.info(f"Starting: reissue_pt_warnings(caught_warnings)")
                 reissue_pt_warnings(caught_warnings)
 
-                logger.info(f"Starting: xm.send_cpu_data_to_device(optimizer_state, self.args.device)")
-                xm.send_cpu_data_to_device(optimizer_state, self.args.device)
-
-                logger.info(f"Starting: xm.send_cpu_data_to_device(lr_scheduler_state, self.args.device)")
+                logger.info(f"Starting: xm.send_cpu_data_to_device(lr_scheduler_state, self.args.device) : {self.args.device}")
                 xm.send_cpu_data_to_device(lr_scheduler_state, self.args.device)
+
+                logger.info(f"Starting: xm.send_cpu_data_to_device(optimizer_state, self.args.device) : {self.args.device}")
+                xm.send_cpu_data_to_device(optimizer_state, self.args.device)
 
                 logger.info(f"Starting: self.optimizer.load_state_dict(optimizer_state)")
                 self.optimizer.load_state_dict(optimizer_state)
