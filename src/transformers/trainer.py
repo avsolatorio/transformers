@@ -1066,20 +1066,25 @@ class Trainer:
                 # will be resumed in deepspeed_init
                 pass
             else:
+                logger.info(f"Loading model to CPU to avoid an OOM error...")
                 # We load the model state dict on the CPU to avoid an OOM error.
                 state_dict = torch.load(os.path.join(resume_from_checkpoint, WEIGHTS_NAME), map_location="cpu")
                 # If the model is on the GPU, it still works!
+                logger.info(f"Starting: self._load_state_dict_in_model(state_dict)")
                 self._load_state_dict_in_model(state_dict)
 
         # If model was re-initialized, put it on the right device and update self.model_wrapped
+        logger.info(f"Starting: if model_reloaded")
         if model_reloaded:
             if self.place_model_on_device:
                 self.model = self.model.to(args.device)
             self.model_wrapped = self.model
 
+        logger.info(f"Starting: train_dataset_is_sized = isinstance(self.train_dataset, collections.abc.Sized)")
         # Keeping track whether we can can len() on the dataset or not
         train_dataset_is_sized = isinstance(self.train_dataset, collections.abc.Sized)
 
+        logger.info(f"Starting: train_dataloader = self.get_train_dataloader()")
         # Data loader and number of training steps
         train_dataloader = self.get_train_dataloader()
 
@@ -1087,6 +1092,7 @@ class Trainer:
         # number of training epochs: num_train_epochs
         # number of training steps per epoch: num_update_steps_per_epoch
         # total number of training steps to execute: max_steps
+        logger.info(f"Starting: total_train_batch_size = args.train_batch_size * args.gradient_accumulation_steps * args.world_size")
         total_train_batch_size = args.train_batch_size * args.gradient_accumulation_steps * args.world_size
         if train_dataset_is_sized:
             num_update_steps_per_epoch = len(train_dataloader) // args.gradient_accumulation_steps
@@ -1110,6 +1116,7 @@ class Trainer:
             num_update_steps_per_epoch = max_steps
             num_train_samples = args.max_steps * total_train_batch_size
 
+        logger.info(f"Starting: if DebugOption.UNDERFLOW_OVERFLOW in self.args.debug")
         if DebugOption.UNDERFLOW_OVERFLOW in self.args.debug:
             debug_overflow = DebugUnderflowOverflow(self.model)  # noqa
 
