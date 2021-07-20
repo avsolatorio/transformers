@@ -610,8 +610,17 @@ class Trainer:
         if is_datasets_available() and isinstance(train_dataset, datasets.Dataset):
             train_dataset = self._remove_unused_columns(train_dataset, description="training")
 
+        data_loader_args = dict(
+            batch_size=self.args.train_batch_size,
+            drop_last=self.args.dataloader_drop_last,
+            num_workers=self.args.dataloader_num_workers,
+            pin_memory=self.args.dataloader_pin_memory,
+        )
+
+        logger.info(f"Starting: if isinstance(train_dataset, torch.utils.data.dataset.IterableDataset) : {data_loader_args}")
         if isinstance(train_dataset, torch.utils.data.dataset.IterableDataset):
             if self.args.world_size > 1:
+                logger.info(f"Starting: train_dataset = IterableDatasetShard( : {data_loader_args}")
                 train_dataset = IterableDatasetShard(
                     train_dataset,
                     batch_size=self.args.train_batch_size,
@@ -620,6 +629,7 @@ class Trainer:
                     process_index=self.args.process_index,
                 )
 
+            logger.info(f"Starting: inside: return DataLoader : {data_loader_args}")
             return DataLoader(
                 train_dataset,
                 batch_size=self.args.train_batch_size,
@@ -628,8 +638,12 @@ class Trainer:
                 pin_memory=self.args.dataloader_pin_memory,
             )
 
+        logger.info(f"Starting: train_sampler = self._get_train_sampler()")
         train_sampler = self._get_train_sampler()
+        data_loader_args["train_sampler"] = train_sampler
 
+
+        logger.info(f"Starting: outside: return DataLoader : {data_loader_args}")
         return DataLoader(
             train_dataset,
             batch_size=self.args.train_batch_size,
@@ -767,7 +781,10 @@ class Trainer:
         Trainer's init through :obj:`optimizers`, or subclass and override this method (or :obj:`create_optimizer`
         and/or :obj:`create_scheduler`) in a subclass.
         """
+
+        logger.info(f"Starting: self.create_optimizer()")
         self.create_optimizer()
+        logger.info(f"Starting: self.create_scheduler(num_training_steps)")
         self.create_scheduler(num_training_steps)
 
     def create_optimizer(self):
@@ -1121,7 +1138,9 @@ class Trainer:
             debug_overflow = DebugUnderflowOverflow(self.model)  # noqa
 
         delay_optimizer_creation = self.sharded_ddp is not None and self.sharded_ddp != ShardedDDPOption.SIMPLE
+        logger.info(f"Starting: delay_optimizer_creation = {delay_optimizer_creation}")
         if args.deepspeed:
+            logger.info(f"Starting: in if args.deepspeed")
             deepspeed_engine, optimizer, lr_scheduler = deepspeed_init(
                 self, num_training_steps=max_steps, resume_from_checkpoint=resume_from_checkpoint
             )
@@ -1131,21 +1150,28 @@ class Trainer:
             self.optimizer = optimizer
             self.lr_scheduler = lr_scheduler
         elif not delay_optimizer_creation:
+            logger.info(f"Starting: in elif not delay_optimizer_creation : self.create_optimizer_and_scheduler(num_training_steps=max_steps)")
             self.create_optimizer_and_scheduler(num_training_steps=max_steps)
 
+        logger.info(f"Starting: self.state = TrainerState()")
         self.state = TrainerState()
         self.state.is_hyper_param_search = trial is not None
 
+        logger.info(f"Starting: model = self._wrap_model(self.model_wrapped)")
         model = self._wrap_model(self.model_wrapped)
 
         # for the rest of this function `model` is the outside model, whether it was wrapped or not
+        logger.info(f"Starting: if model is not self.model")
         if model is not self.model:
             self.model_wrapped = model
 
+        logger.info(f"Starting: if delay_optimizer_creation")
         if delay_optimizer_creation:
+            logger.info(f"Starting: in if delay_optimizer_creation : self.create_optimizer_and_scheduler(num_training_steps=max_steps)")
             self.create_optimizer_and_scheduler(num_training_steps=max_steps)
 
         # Check if saved optimizer or scheduler states exist
+        logger.info(f"Starting: self._load_optimizer_and_scheduler(resume_from_checkpoint)")
         self._load_optimizer_and_scheduler(resume_from_checkpoint)
 
         # important: at this point:
@@ -1153,6 +1179,7 @@ class Trainer:
         # self.model_wrapped is DDP(Transformers Model), Deepspeed(Transformers Model), etc.
 
         # Train!
+        logger.info(f"Starting: num_examples = (")
         num_examples = (
             self.num_examples(train_dataloader) if train_dataset_is_sized else total_train_batch_size * args.max_steps
         )
@@ -1593,17 +1620,30 @@ class Trainer:
             os.path.join(checkpoint, "scheduler.pt")
         ):
             # Load in optimizer and scheduler states
+            logger.info(f"Starting: if is_torch_tpu_available()")
             if is_torch_tpu_available():
+                logger.info(f'Starting: in if is_torch_tpu_available() : optimizer_state = torch.load(os.path.join(checkpoint, "optimizer.pt"), map_location="cpu")')
                 # On TPU we have to take some extra precautions to properly load the states on the right device.
                 optimizer_state = torch.load(os.path.join(checkpoint, "optimizer.pt"), map_location="cpu")
+
+                logger.info(f"Starting: with warnings.catch_warnings(record=True) as caught_warnings:")
                 with warnings.catch_warnings(record=True) as caught_warnings:
+                    logger.info(f'Starting: lr_scheduler_state = torch.load(os.path.join(checkpoint, "scheduler.pt"), map_location="cpu")')
                     lr_scheduler_state = torch.load(os.path.join(checkpoint, "scheduler.pt"), map_location="cpu")
+
+                logger.info(f"Starting: reissue_pt_warnings(caught_warnings)")
                 reissue_pt_warnings(caught_warnings)
 
+                logger.info(f"Starting: xm.send_cpu_data_to_device(optimizer_state, self.args.device)")
                 xm.send_cpu_data_to_device(optimizer_state, self.args.device)
+
+                logger.info(f"Starting: xm.send_cpu_data_to_device(lr_scheduler_state, self.args.device)")
                 xm.send_cpu_data_to_device(lr_scheduler_state, self.args.device)
 
+                logger.info(f"Starting: self.optimizer.load_state_dict(optimizer_state)")
                 self.optimizer.load_state_dict(optimizer_state)
+
+                logger.info(f"Starting: self.lr_scheduler.load_state_dict(lr_scheduler_state)")
                 self.lr_scheduler.load_state_dict(lr_scheduler_state)
             else:
                 map_location = "cpu" if is_sagemaker_mp_enabled() else self.args.device
