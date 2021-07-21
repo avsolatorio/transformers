@@ -28,6 +28,8 @@ import sys
 from dataclasses import dataclass, field
 from typing import Optional
 
+from filelock import FileLock
+
 from datasets import load_dataset
 
 import transformers
@@ -475,6 +477,8 @@ def main():
     )
 
     logger.info("Building Trainer...")
+    lock_file = "/content/tpu_lock.lock"
+    tpu_lock = FileLock(lock_file)
     # Initialize our Trainer
     trainer = Trainer(
         model=model,
@@ -483,6 +487,7 @@ def main():
         eval_dataset=eval_dataset if training_args.do_eval else None,
         tokenizer=tokenizer,
         data_collator=data_collator,
+        tpu_lock=tpu_lock
     )
 
     logger.info("Starting: training_args.do_train...")
