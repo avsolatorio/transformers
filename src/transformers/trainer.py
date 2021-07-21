@@ -391,9 +391,9 @@ class Trainer:
         logger.info(f"Starting: In Trainer(): if self.place_model_on_device:")
         if self.place_model_on_device:
             logger.info(f"Starting: In Trainer(): in if self.place_model_on_device: model = model.to(args.device)")
-            if self.tpu_lock:
-                self.tpu_lock.acquire()
-                logger.info(f"Starting: In Trainer(): acquired tpu_lock for model = model.to(args.device)!")
+            # if self.tpu_lock:
+            #     self.tpu_lock.acquire()
+            #     logger.info(f"Starting: In Trainer(): acquired tpu_lock for model = model.to(args.device)!")
             model = model.to(args.device)
 
         logger.info(f"Starting: In Trainer(): if self.is_model_parallel:")
@@ -1206,9 +1206,12 @@ class Trainer:
         logger.info(f"Starting: self._load_optimizer_and_scheduler(resume_from_checkpoint)")
         self._load_optimizer_and_scheduler(resume_from_checkpoint)
 
-        if self.tpu_lock:
-            logger.info(f"Starting: releasing tpu_lock: self.tpu_lock.release()")
-            self.tpu_lock.release()
+        # if self.tpu_lock:
+        #     logger.info(f"Starting: releasing tpu_lock: self.tpu_lock.release()")
+        #     self.tpu_lock.release()
+        if os.path.exists(self.tpu_lock):
+            logger.info(f"Starting: releasing tpu_lock: os.remove(self.tpu_lock)")
+            os.remove(self.tpu_lock)
 
         # important: at this point:
         # self.model         is the Transformers Model
