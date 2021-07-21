@@ -30,7 +30,6 @@ from typing import Optional
 
 import time
 import random
-from filelock import FileLock
 
 from datasets import load_dataset
 
@@ -43,10 +42,11 @@ from transformers import (
     AutoTokenizer,
     DataCollatorForLanguageModeling,
     HfArgumentParser,
-    Trainer,
     TrainingArguments,
     set_seed,
 )
+
+from transformers.trainer_send_cpu_data_to_device import Trainer
 from transformers.trainer_utils import get_last_checkpoint
 from transformers.utils import check_min_version
 from transformers.utils.versions import require_version
@@ -60,18 +60,6 @@ require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/lang
 logger = logging.getLogger(__name__)
 MODEL_CONFIG_CLASSES = list(MODEL_FOR_MASKED_LM_MAPPING.keys())
 MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
-
-
-LOCK_FILE = "/content/tpu_lock.lock"
-
-def get_lock_file():
-    while True:
-        if os.path.exists(LOCK_FILE):
-            time.sleep(random.randint(30, 60))
-        else:
-            with open(LOCK_FILE, "w+") as f:
-                f.write("1")
-            return LOCK_FILE
 
 
 @dataclass
@@ -387,11 +375,6 @@ def main():
             )
         max_seq_length = min(data_args.max_seq_length, tokenizer.model_max_length)
 
-
-    logger.info("Starting: acquire tpu_lock...")
-    tpu_lock = get_lock_file()
-    logger.info("Starting: tpu_lock acquired!...")
-
     logger.info("Starting: Running tokenizer...")
     if data_args.line_by_line:
         # When using line_by_line, we just tokenize each nonempty line.
@@ -504,7 +487,6 @@ def main():
         eval_dataset=eval_dataset if training_args.do_eval else None,
         tokenizer=tokenizer,
         data_collator=data_collator,
-        tpu_lock=tpu_lock
     )
 
     logger.info("Starting: training_args.do_train...")
