@@ -30,6 +30,8 @@ from logging import StreamHandler
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
 
+from filelock import FileLock
+
 from tqdm.auto import tqdm
 
 
@@ -388,7 +390,11 @@ class Trainer:
         logger.info(f"Starting: In Trainer(): if self.place_model_on_device:")
         if self.place_model_on_device:
             logger.info(f"Starting: In Trainer(): in if self.place_model_on_device: model = model.to(args.device)")
-            model = model.to(args.device)
+            lock_file = "/content/model.to.lock"
+
+            with FileLock(lock_file):
+                logger.info(f"Starting: In Trainer(): got the lock for model = model.to(args.device)!")
+                model = model.to(args.device)
 
         logger.info(f"Starting: In Trainer(): if self.is_model_parallel:")
         # Force n_gpu to 1 to avoid DataParallel as MP will manage the GPUs
@@ -1649,28 +1655,34 @@ class Trainer:
             logger.info(f"Starting: if is_torch_tpu_available()")
             if is_torch_tpu_available():
                 logger.info(f'Starting: in if is_torch_tpu_available() : optimizer_state = torch.load(os.path.join(checkpoint, "optimizer.pt"), map_location="cpu")')
-                # On TPU we have to take some extra precautions to properly load the states on the right device.
-                optimizer_state = torch.load(os.path.join(checkpoint, "optimizer.pt"), map_location="cpu")
 
-                logger.info(f"Starting: with warnings.catch_warnings(record=True) as caught_warnings:")
-                with warnings.catch_warnings(record=True) as caught_warnings:
-                    logger.info(f'Starting: lr_scheduler_state = torch.load(os.path.join(checkpoint, "scheduler.pt"), map_location="cpu")')
-                    lr_scheduler_state = torch.load(os.path.join(checkpoint, "scheduler.pt"), map_location="cpu")
+                lock_file = "/content/_load_optimizer_and_scheduler.lock"
 
-                logger.info(f"Starting: reissue_pt_warnings(caught_warnings)")
-                reissue_pt_warnings(caught_warnings)
+                with FileLock(lock_file):
+                    logger.info(f"Starting: In Trainer(): got the lock for _load_optimizer_and_scheduler!")
 
-                logger.info(f"Starting: xm.send_cpu_data_to_device(lr_scheduler_state, self.args.device) : {self.args.device}")
-                send_cpu_data_to_device(lr_scheduler_state, self.args.device)
+                    # On TPU we have to take some extra precautions to properly load the states on the right device.
+                    optimizer_state = torch.load(os.path.join(checkpoint, "optimizer.pt"), map_location="cpu")
 
-                logger.info(f"Starting: xm.send_cpu_data_to_device(optimizer_state, self.args.device) : {self.args.device}")
-                send_cpu_data_to_device(optimizer_state, self.args.device)
+                    logger.info(f"Starting: with warnings.catch_warnings(record=True) as caught_warnings:")
+                    with warnings.catch_warnings(record=True) as caught_warnings:
+                        logger.info(f'Starting: lr_scheduler_state = torch.load(os.path.join(checkpoint, "scheduler.pt"), map_location="cpu")')
+                        lr_scheduler_state = torch.load(os.path.join(checkpoint, "scheduler.pt"), map_location="cpu")
 
-                logger.info(f"Starting: self.optimizer.load_state_dict(optimizer_state)")
-                self.optimizer.load_state_dict(optimizer_state)
+                    logger.info(f"Starting: reissue_pt_warnings(caught_warnings)")
+                    reissue_pt_warnings(caught_warnings)
 
-                logger.info(f"Starting: self.lr_scheduler.load_state_dict(lr_scheduler_state)")
-                self.lr_scheduler.load_state_dict(lr_scheduler_state)
+                    logger.info(f"Starting: xm.send_cpu_data_to_device(lr_scheduler_state, self.args.device) : {self.args.device}")
+                    send_cpu_data_to_device(lr_scheduler_state, self.args.device)
+
+                    logger.info(f"Starting: xm.send_cpu_data_to_device(optimizer_state, self.args.device) : {self.args.device}")
+                    send_cpu_data_to_device(optimizer_state, self.args.device)
+
+                    logger.info(f"Starting: self.optimizer.load_state_dict(optimizer_state)")
+                    self.optimizer.load_state_dict(optimizer_state)
+
+                    logger.info(f"Starting: self.lr_scheduler.load_state_dict(lr_scheduler_state)")
+                    self.lr_scheduler.load_state_dict(lr_scheduler_state)
             else:
                 map_location = "cpu" if is_sagemaker_mp_enabled() else self.args.device
                 self.optimizer.load_state_dict(
