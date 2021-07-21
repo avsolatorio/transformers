@@ -378,7 +378,8 @@ def main():
     lock_file = "/content/tpu_lock.lock"
     tpu_lock = FileLock(lock_file)
     logger.info("Starting: acquire tpu_lock...")
-    tpu_lock.acquire()
+    tpu_lock.acquire(timeout=-1, poll_intervall=60)
+    logger.info("Starting: tpu_lock acquired!...")
 
     logger.info("Starting: Running tokenizer...")
     if data_args.line_by_line:
