@@ -75,6 +75,8 @@ def get_lock_file():
             return LOCK_FILE
 
 
+tpu_lock = FileLock(LOCK_FILE)
+
 @dataclass
 class ModelArguments:
     """
@@ -390,7 +392,8 @@ def main():
 
 
     logger.info("Starting: acquire tpu_lock...")
-    tpu_lock = get_lock_file()
+    # tpu_lock = get_lock_file()
+    tpu_lock.acquire(poll_intervall=random.randint(7, 31))
     logger.info("Starting: tpu_lock acquired!...")
 
     logger.info("Starting: Running tokenizer...")

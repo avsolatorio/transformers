@@ -1206,12 +1206,14 @@ class Trainer:
         logger.info(f"Starting: self._load_optimizer_and_scheduler(resume_from_checkpoint)")
         self._load_optimizer_and_scheduler(resume_from_checkpoint)
 
-        # if self.tpu_lock:
-        #     logger.info(f"Starting: releasing tpu_lock: self.tpu_lock.release()")
-        #     self.tpu_lock.release()
-        if os.path.exists(self.tpu_lock):
-            logger.info(f"Starting: releasing tpu_lock: os.remove(self.tpu_lock)")
-            os.remove(self.tpu_lock)
+        if self.tpu_lock:
+            logger.info(f"Starting: releasing tpu_lock: self.tpu_lock.release() in {args.device}")
+            if isinstance(self.tpu_lock, str):
+                if os.path.exists(self.tpu_lock):
+                    logger.info(f"Starting: releasing tpu_lock: os.remove(self.tpu_lock)")
+                    os.remove(self.tpu_lock)
+            else:
+                self.tpu_lock.release()
 
         # important: at this point:
         # self.model         is the Transformers Model
