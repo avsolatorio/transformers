@@ -373,6 +373,13 @@ def main():
             )
         max_seq_length = min(data_args.max_seq_length, tokenizer.model_max_length)
 
+
+
+    lock_file = "/content/tpu_lock.lock"
+    tpu_lock = FileLock(lock_file)
+    logger.info("Starting: acquire tpu_lock...")
+    tpu_lock.acquire()
+
     logger.info("Starting: Running tokenizer...")
     if data_args.line_by_line:
         # When using line_by_line, we just tokenize each nonempty line.
@@ -477,8 +484,6 @@ def main():
     )
 
     logger.info("Building Trainer...")
-    lock_file = "/content/tpu_lock.lock"
-    tpu_lock = FileLock(lock_file)
     # Initialize our Trainer
     trainer = Trainer(
         model=model,
