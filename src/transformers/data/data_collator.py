@@ -581,8 +581,10 @@ class DataCollatorForBPWholeWordMask(DataCollatorForLanguageModeling):
                 break
             # If adding a whole-word mask would exceed the maximum number of
             # predictions, then just skip this candidate.
-            if not self.bp_wwm_ignore_num_to_predict and len(masked_lms) + len(index_set) > num_to_predict:
+            combined_len = len(masked_lms) + len(index_set)
+            if (not self.bp_wwm_ignore_num_to_predict and combined_len > num_to_predict) or combined_len > max_predictions:
                 continue
+
             is_any_index_covered = False
             for index in index_set:
                 if index in covered_indexes:
