@@ -133,7 +133,7 @@ class DataTrainingArguments:
         default=None, metadata={"help": "Any key that must be manually provided for each unique configuration of data."},
     )
     bp_wwm_ignore_num_to_predict: bool = field(
-        default=False, metadata={"help": "If True, ignore num_to_predict when multi-token word is masked."}
+        default=True, metadata={"help": "If True, ignore num_to_predict when multi-token word is masked."}
     )
     dataset_name: Optional[str] = field(
         default=None, metadata={"help": "The name of the dataset to use (via the datasets library)."}
@@ -491,7 +491,7 @@ def main():
     gc.collect()
     gc.collect()
 
-    logger.info("Building DataCollatorForBPWholeWordMask: bp_wwm_ignore_num_to_predict={data_args.bp_wwm_ignore_num_to_predict}...")
+    logger.info(f"Building DataCollatorForBPWholeWordMask: bp_wwm_ignore_num_to_predict={data_args.bp_wwm_ignore_num_to_predict}...")
     # Data collator
     # This one will take care of randomly masking the tokens.
     pad_to_multiple_of_8 = data_args.line_by_line and training_args.fp16 and not data_args.pad_to_max_length
