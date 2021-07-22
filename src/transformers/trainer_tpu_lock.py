@@ -398,13 +398,13 @@ class Trainer:
             #     logger.info(f"Starting: In Trainer(): acquired tpu_lock for model = model.to(args.device)!")
 
             logger.info(f"Starting: In Trainer(): in if self.place_model_on_device: model = model.to(args.device)")
-            if self.tpu_lock and isinstance(self.tpu_lock, str):
-                logger.info("Starting: In Trainer(): acquiring lock...")
-                with FileLock(self.tpu_lock).acquire(poll_intervall=random.randint(23, 61)):
-                    logger.info("Starting: In Trainer(): lock acquired...")
-                    model = model.to(args.device)
-            else:
-                model = model.to(args.device)
+            # if self.tpu_lock and isinstance(self.tpu_lock, str):
+            #     logger.info("Starting: In Trainer(): acquiring lock...")
+            #     with FileLock(self.tpu_lock).acquire(poll_intervall=random.randint(23, 61)):
+            #         logger.info("Starting: In Trainer(): lock acquired...")
+            #         model = model.to(args.device)
+            # else:
+            model = model.to(args.device)
 
         logger.info(f"Starting: In Trainer(): if self.is_model_parallel:")
         # Force n_gpu to 1 to avoid DataParallel as MP will manage the GPUs
@@ -1698,13 +1698,13 @@ class Trainer:
                 logger.info(f"Starting: self.lr_scheduler.load_state_dict(lr_scheduler_state)")
                 self.lr_scheduler.load_state_dict(lr_scheduler_state)
 
-                if self.tpu_lock:
-                    logger.info(f"Starting: acquiring tpu_lock for _load_optimizer")
-                    with FileLock(self.tpu_lock).acquire(poll_intervall=random.randint(23, 67)):
-                        logger.info(f"Starting: tpu_lock for _load_optimizer acquired")
-                        self._load_optimizer(checkpoint)
-                else:
-                    self._load_optimizer(checkpoint)
+                # if self.tpu_lock:
+                #     logger.info(f"Starting: acquiring tpu_lock for _load_optimizer")
+                #     with FileLock(self.tpu_lock).acquire(poll_intervall=random.randint(23, 67)):
+                #         logger.info(f"Starting: tpu_lock for _load_optimizer acquired")
+                #         self._load_optimizer(checkpoint)
+                # else:
+                self._load_optimizer(checkpoint)
 
             else:
                 map_location = "cpu" if is_sagemaker_mp_enabled() else self.args.device

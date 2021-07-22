@@ -247,6 +247,11 @@ def main():
     )
     logger.setLevel(logging.INFO if training_args.should_log else logging.WARN)
 
+    logger.info("Starting: acquiring lock")
+    tpu_lock = FileLock(LOCK_FILE)
+    tpu_lock.acquire(timeout=-1, poll_intervall=random.randint(63, 131))
+    logger.info("Starting: lock acquired")
+
     # Log on each process the small summary:
     logger.warning(
         f"Process rank: {training_args.local_rank}, device: {training_args.device}, n_gpu: {training_args.n_gpu}"
@@ -392,10 +397,10 @@ def main():
         max_seq_length = min(data_args.max_seq_length, tokenizer.model_max_length)
 
 
-    logger.info("Starting: acquire tpu_lock...")
-    # tpu_lock = get_lock_file()
-    # tpu_lock.acquire(poll_intervall=random.randint(7, 31))
-    logger.info("Starting: tpu_lock acquired!...")
+    # logger.info("Starting: acquire tpu_lock...")
+    # # tpu_lock = get_lock_file()
+    # # tpu_lock.acquire(poll_intervall=random.randint(7, 31))
+    # logger.info("Starting: tpu_lock acquired!...")
 
     logger.info("Starting: Running tokenizer...")
     if data_args.line_by_line:
