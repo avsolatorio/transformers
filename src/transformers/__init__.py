@@ -449,6 +449,7 @@ if is_torch_available():
         "DataCollatorForSOP",
         "DataCollatorForTokenClassification",
         "DataCollatorForWholeWordMask",
+        "DataCollatorForBPWholeWordMask",
         "DataCollatorWithPadding",
         "default_data_collator",
     ]
