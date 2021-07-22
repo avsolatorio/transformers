@@ -30,6 +30,8 @@ from logging import StreamHandler
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
 
+from filelock import FileLock
+
 from tqdm.auto import tqdm
 
 
@@ -390,11 +392,19 @@ class Trainer:
 
         logger.info(f"Starting: In Trainer(): if self.place_model_on_device:")
         if self.place_model_on_device:
-            logger.info(f"Starting: In Trainer(): in if self.place_model_on_device: model = model.to(args.device)")
+
             # if self.tpu_lock:
             #     self.tpu_lock.acquire()
             #     logger.info(f"Starting: In Trainer(): acquired tpu_lock for model = model.to(args.device)!")
-            model = model.to(args.device)
+
+            logger.info(f"Starting: In Trainer(): in if self.place_model_on_device: model = model.to(args.device)")
+            if self.tpu_lock and isinstance(self.tpu_lock, str):
+                logger.info("Starting: In Trainer(): acquiring lock...")
+                with FileLock(self.tpu_lock).acquire(pool_intervall=random.randint(23, 61)):
+                    logger.info("Starting: In Trainer(): lock acquired...")
+                    model = model.to(args.device)
+            else:
+                model = model.to(args.device)
 
         logger.info(f"Starting: In Trainer(): if self.is_model_parallel:")
         # Force n_gpu to 1 to avoid DataParallel as MP will manage the GPUs
@@ -1648,6 +1658,16 @@ class Trainer:
         if self.args.should_save:
             self._rotate_checkpoints(use_mtime=True, output_dir=run_dir)
 
+    def _load_optimizer(self, checkpoint):
+        # On TPU we have to take some extra precautions to properly load the states on the right device.
+        logger.info(f'Starting: in if is_torch_tpu_available() : optimizer_state = torch.load(os.path.join(checkpoint, "optimizer.pt"), map_location="cpu")')
+        optimizer_state = torch.load(os.path.join(checkpoint, "optimizer.pt"), map_location="cpu")
+
+        logger.info(f"Starting: xm.send_cpu_data_to_device(optimizer_state, self.args.device) : {self.args.device}")
+        send_cpu_data_to_device(optimizer_state, self.args.device)
+        logger.info(f"Starting: self.optimizer.load_state_dict(optimizer_state)")
+        self.optimizer.load_state_dict(optimizer_state)
+
     def _load_optimizer_and_scheduler(self, checkpoint):
         """If optimizer and scheduler states exist, load them."""
         if checkpoint is None:
@@ -1663,10 +1683,7 @@ class Trainer:
             # Load in optimizer and scheduler states
             logger.info(f"Starting: if is_torch_tpu_available()")
             if is_torch_tpu_available():
-                logger.info(f'Starting: in if is_torch_tpu_available() : optimizer_state = torch.load(os.path.join(checkpoint, "optimizer.pt"), map_location="cpu")')
 
-                # On TPU we have to take some extra precautions to properly load the states on the right device.
-                optimizer_state = torch.load(os.path.join(checkpoint, "optimizer.pt"), map_location="cpu")
 
                 logger.info(f"Starting: with warnings.catch_warnings(record=True) as caught_warnings:")
                 with warnings.catch_warnings(record=True) as caught_warnings:
@@ -1678,15 +1695,17 @@ class Trainer:
 
                 logger.info(f"Starting: xm.send_cpu_data_to_device(lr_scheduler_state, self.args.device) : {self.args.device}")
                 send_cpu_data_to_device(lr_scheduler_state, self.args.device)
-
-                logger.info(f"Starting: xm.send_cpu_data_to_device(optimizer_state, self.args.device) : {self.args.device}")
-                send_cpu_data_to_device(optimizer_state, self.args.device)
-
-                logger.info(f"Starting: self.optimizer.load_state_dict(optimizer_state)")
-                self.optimizer.load_state_dict(optimizer_state)
-
                 logger.info(f"Starting: self.lr_scheduler.load_state_dict(lr_scheduler_state)")
                 self.lr_scheduler.load_state_dict(lr_scheduler_state)
+
+                if self.tpu_lock:
+                    logger.info(f"Starting: acquiring tpu_lock for _load_optimizer")
+                    with FileLock(self.tpu_lock).acquire(poll_intervall=random.randint(23, 67)):
+                        logger.info(f"Starting: tpu_lock for _load_optimizer acquired")
+                        self._load_optimizer(checkpoint)
+                else:
+                    self._load_optimizer(checkpoint)
+
             else:
                 map_location = "cpu" if is_sagemaker_mp_enabled() else self.args.device
                 self.optimizer.load_state_dict(
