@@ -315,6 +315,9 @@ class DataCollatorForLanguageModeling:
             The probability with which to (randomly) mask tokens in the input, when :obj:`mlm` is set to :obj:`True`.
         pad_to_multiple_of (:obj:`int`, `optional`):
             If set will pad the sequence to a multiple of the provided value.
+        bp_wwm_ignore_num_to_predict (:obj:`bool`, `optional`, defaults to :obj:`False`):
+            Controls the behaviour of DataCollatorForBPWholeWordMask. If set to :obj:`True`, length of multi-token words will
+            be ignored when calculating the number of tokens to predict.
 
     .. note::
 
@@ -328,6 +331,7 @@ class DataCollatorForLanguageModeling:
     mlm: bool = True
     mlm_probability: float = 0.15
     pad_to_multiple_of: Optional[int] = None
+    bp_wwm_ignore_num_to_predict: bool = False
 
     def __post_init__(self):
         if self.mlm and self.tokenizer.mask_token is None:
@@ -577,7 +581,7 @@ class DataCollatorForBPWholeWordMask(DataCollatorForLanguageModeling):
                 break
             # If adding a whole-word mask would exceed the maximum number of
             # predictions, then just skip this candidate.
-            if len(masked_lms) + len(index_set) > num_to_predict:
+            if not self.bp_wwm_ignore_num_to_predict and len(masked_lms) + len(index_set) > num_to_predict:
                 continue
             is_any_index_covered = False
             for index in index_set:
