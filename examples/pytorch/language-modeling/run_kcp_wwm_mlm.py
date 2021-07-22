@@ -41,7 +41,7 @@ from transformers import (
     AutoConfig,
     AutoModelForMaskedLM,
     AutoTokenizer,
-    DataCollatorForLanguageModeling,
+    DataCollatorForBPWholeWordMask,
     HfArgumentParser,
     TrainingArguments,
     set_seed,
@@ -131,6 +131,9 @@ class DataTrainingArguments:
     )
     data_cache_key: str = field(
         default=None, metadata={"help": "Any key that must be manually provided for each unique configuration of data."},
+    )
+    bp_wwm_ignore_num_to_predict: bool = field(
+        default=False, metadata={"help": "If True, ignore num_to_predict when multi-token word is masked."}
     )
     dataset_name: Optional[str] = field(
         default=None, metadata={"help": "The name of the dataset to use (via the datasets library)."}
@@ -391,7 +394,7 @@ def main():
                 padding=padding,
                 truncation=True,
                 max_length=max_seq_length,
-                # We use this option because DataCollatorForLanguageModeling (see below) is more efficient when it
+                # We use this option because DataCollatorForBPWholeWordMask (see below) is more efficient when it
                 # receives the `special_tokens_mask`.
                 return_special_tokens_mask=True,
             )
@@ -413,7 +416,7 @@ def main():
         gc.collect()
     else:
         # Otherwise, we tokenize every text, then concatenate them together before splitting them in smaller parts.
-        # We use `return_special_tokens_mask=True` because DataCollatorForLanguageModeling (see below) is more
+        # We use `return_special_tokens_mask=True` because DataCollatorForBPWholeWordMask (see below) is more
         # efficient when it receives the `special_tokens_mask`.
         def tokenize_function(examples):
             return tokenizer(examples[text_column_name], return_special_tokens_mask=True)
@@ -488,14 +491,15 @@ def main():
     gc.collect()
     gc.collect()
 
-    logger.info("Building DataCollatorForLanguageModeling...")
+    logger.info("Building DataCollatorForBPWholeWordMask: bp_wwm_ignore_num_to_predict={data_args.bp_wwm_ignore_num_to_predict}...")
     # Data collator
     # This one will take care of randomly masking the tokens.
     pad_to_multiple_of_8 = data_args.line_by_line and training_args.fp16 and not data_args.pad_to_max_length
-    data_collator = DataCollatorForLanguageModeling(
+    data_collator = DataCollatorForBPWholeWordMask(
         tokenizer=tokenizer,
         mlm_probability=data_args.mlm_probability,
         pad_to_multiple_of=8 if pad_to_multiple_of_8 else None,
+        bp_wwm_ignore_num_to_predict=data_args.bp_wwm_ignore_num_to_predict,
     )
 
     logger.info("Building Trainer...")
