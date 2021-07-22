@@ -27,6 +27,7 @@ import os
 import sys
 from dataclasses import dataclass, field
 from typing import Optional
+import gc
 
 import time
 import random
@@ -249,7 +250,7 @@ def main():
 
     logger.info("Starting: acquiring lock")
     tpu_lock = FileLock(LOCK_FILE)
-    tpu_lock.acquire(timeout=-1, poll_intervall=random.randint(63, 131))
+    tpu_lock.acquire(timeout=-1, poll_intervall=random.randint(3, 23))
     logger.info("Starting: lock acquired")
 
     # Log on each process the small summary:
@@ -422,15 +423,21 @@ def main():
                 return_special_tokens_mask=True,
             )
 
+        cache_file_names = {k: os.path.join(data_cache_key_dir, f'{data_args.data_cache_key}-{k}-tokenized.arrow') for k in datasets}
         tokenized_datasets = datasets.map(
             tokenize_function,
             batched=True,
             num_proc=data_args.preprocessing_num_workers,
-            cache_file_names={k: os.path.join(data_cache_key_dir, f'{data_args.data_cache_key}-{k}-tokenized.arrow') for k in datasets},
+            cache_file_names=cache_file_names,
             remove_columns=[text_column_name],
             load_from_cache_file=not data_args.overwrite_cache,
             desc="Running tokenizer on dataset line_by_line",
         )
+
+        del datasets
+        gc.collect()
+        gc.collect()
+        gc.collect()
     else:
         # Otherwise, we tokenize every text, then concatenate them together before splitting them in smaller parts.
         # We use `return_special_tokens_mask=True` because DataCollatorForLanguageModeling (see below) is more
@@ -438,15 +445,23 @@ def main():
         def tokenize_function(examples):
             return tokenizer(examples[text_column_name], return_special_tokens_mask=True)
 
+        tokenize_cache_file_names = {k: os.path.join(data_cache_key_dir, f'{data_args.data_cache_key}-{k}-tokenized.arrow') for k in datasets}
+        group_cache_file_names = {k: os.path.join(data_cache_key_dir, f'{data_args.data_cache_key}-{k}-grouped.arrow') for k in datasets}
+
         tokenized_datasets = datasets.map(
             tokenize_function,
             batched=True,
             num_proc=data_args.preprocessing_num_workers,
-            cache_file_names={k: os.path.join(data_cache_key_dir, f'{data_args.data_cache_key}-{k}-tokenized.arrow') for k in datasets},
+            cache_file_names=tokenize_cache_file_names,
             remove_columns=column_names,
             load_from_cache_file=not data_args.overwrite_cache,
             desc="Running tokenizer on every text in dataset",
         )
+
+        del datasets
+        gc.collect()
+        gc.collect()
+        gc.collect()
 
         # Main data processing function that will concatenate all texts from our dataset and generate chunks of
         # max_seq_length.
@@ -476,7 +491,7 @@ def main():
             group_texts,
             batched=True,
             num_proc=data_args.preprocessing_num_workers,
-            cache_file_names={k: os.path.join(data_cache_key_dir, f'{data_args.data_cache_key}-{k}-grouped.arrow') for k in datasets},
+            cache_file_names=group_cache_file_names,
             load_from_cache_file=not data_args.overwrite_cache,
             desc=f"Grouping texts in chunks of {max_seq_length}",
         )
