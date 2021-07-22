@@ -30,6 +30,8 @@ from logging import StreamHandler
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
 
+from filelock import FileLock
+
 from tqdm.auto import tqdm
 
 
@@ -1139,7 +1141,11 @@ class Trainer:
             self.create_optimizer_and_scheduler(num_training_steps=max_steps)
 
         # Check if saved optimizer or scheduler states exist
-        self._load_optimizer_and_scheduler(resume_from_checkpoint)
+        file_lock = FileLock("/tmp/_load_optimizer_and_scheduler.lock")
+        logger.info(f"Starting: acquiring lock for _load_optimizer_and_scheduler")
+        with file_lock.acquire(timeout=-1):
+            logger.info(f"Starting: lock acquired for _load_optimizer_and_scheduler")
+            self._load_optimizer_and_scheduler(resume_from_checkpoint)
 
         # important: at this point:
         # self.model         is the Transformers Model
