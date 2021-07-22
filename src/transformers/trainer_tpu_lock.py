@@ -400,7 +400,7 @@ class Trainer:
             logger.info(f"Starting: In Trainer(): in if self.place_model_on_device: model = model.to(args.device)")
             if self.tpu_lock and isinstance(self.tpu_lock, str):
                 logger.info("Starting: In Trainer(): acquiring lock...")
-                with FileLock(self.tpu_lock).acquire(pool_intervall=random.randint(23, 61)):
+                with FileLock(self.tpu_lock).acquire(poll_intervall=random.randint(23, 61)):
                     logger.info("Starting: In Trainer(): lock acquired...")
                     model = model.to(args.device)
             else:
