@@ -540,7 +540,7 @@ class DataCollatorForBPWholeWordMask(DataCollatorForLanguageModeling):
 
             # For Chinese tokens, we need extra inf to mark sub-word, e.g [喜,欢]-> [喜，##欢]
             if "chinese_ref" in e:
-                raise AttributeError, "Not supported yet"
+                raise AttributeError("Not supported yet")
                 # ref_pos = tolist(e["chinese_ref"])
                 # len_seq = len(e["input_ids"])
                 # for i in range(len_seq):
