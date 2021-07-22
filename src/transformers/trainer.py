@@ -150,7 +150,6 @@ if is_datasets_available():
     import datasets
 
 if is_torch_tpu_available():
-    import torch_xla
     import torch_xla.core.xla_model as xm
     import torch_xla.debug.metrics as met
     import torch_xla.distributed.parallel_loader as pl
@@ -183,25 +182,6 @@ if TYPE_CHECKING:
     import optuna
 
 logger = logging.get_logger(__name__)
-
-
-def send_cpu_data_to_device(data, device):
-    logger.info(f"Inside send_cpu_data_to_device...")
-    def convert_fn(tensors, tensor_batch=2):
-        converted_tensors = []
-
-        for i in range(0, len(tensors), tensor_batch):
-            logger.info(f"Processing tensor_batch: {i}...")
-            devices = [str(device)] * len(tensors[i: i+tensor_batch])
-            converted_tensors.extend(
-                torch_xla._XLAC._xla_tensors_from_aten(
-                    tensors[i: i+tensor_batch], devices))
-        return converted_tensors
-
-    def select_fn(v):
-        return type(v) == torch.Tensor and v.device.type == 'cpu'
-
-    return xm.ToXlaTensorArena(convert_fn, select_fn).transform(data)
 
 
 class Trainer:
@@ -293,10 +273,7 @@ class Trainer:
         compute_metrics: Optional[Callable[[EvalPrediction], Dict]] = None,
         callbacks: Optional[List[TrainerCallback]] = None,
         optimizers: Tuple[torch.optim.Optimizer, torch.optim.lr_scheduler.LambdaLR] = (None, None),
-        tpu_lock=None,
     ):
-        self.tpu_lock = tpu_lock
-
         if args is None:
             output_dir = "tmp_trainer"
             logger.info(f"No `TrainingArguments` passed, using `output_dir={output_dir}`.")
@@ -319,7 +296,6 @@ class Trainer:
         # force device and distributed setup init explicitly
         args._setup_devices
 
-        logger.info(f"Starting: In Trainer():  if model is None:")
         if model is None:
             if model_init is not None:
                 self.model_init = model_init
@@ -380,23 +356,15 @@ class Trainer:
         ):
             self.place_model_on_device = False
 
-        logger.info(f"Starting: In Trainer(): {self.place_model_on_device} default_collator = default_data_collator if tokenizer is None else DataCollatorWithPadding(tokenizer)")
-
         default_collator = default_data_collator if tokenizer is None else DataCollatorWithPadding(tokenizer)
         self.data_collator = data_collator if data_collator is not None else default_collator
         self.train_dataset = train_dataset
         self.eval_dataset = eval_dataset
         self.tokenizer = tokenizer
 
-        logger.info(f"Starting: In Trainer(): if self.place_model_on_device:")
         if self.place_model_on_device:
-            logger.info(f"Starting: In Trainer(): in if self.place_model_on_device: model = model.to(args.device)")
-            # if self.tpu_lock:
-            #     self.tpu_lock.acquire()
-            #     logger.info(f"Starting: In Trainer(): acquired tpu_lock for model = model.to(args.device)!")
             model = model.to(args.device)
 
-        logger.info(f"Starting: In Trainer(): if self.is_model_parallel:")
         # Force n_gpu to 1 to avoid DataParallel as MP will manage the GPUs
         if self.is_model_parallel:
             self.args._n_gpu = 1
@@ -642,17 +610,8 @@ class Trainer:
         if is_datasets_available() and isinstance(train_dataset, datasets.Dataset):
             train_dataset = self._remove_unused_columns(train_dataset, description="training")
 
-        data_loader_args = dict(
-            batch_size=self.args.train_batch_size,
-            drop_last=self.args.dataloader_drop_last,
-            num_workers=self.args.dataloader_num_workers,
-            pin_memory=self.args.dataloader_pin_memory,
-        )
-
-        logger.info(f"Starting: if isinstance(train_dataset, torch.utils.data.dataset.IterableDataset) : {data_loader_args}")
         if isinstance(train_dataset, torch.utils.data.dataset.IterableDataset):
             if self.args.world_size > 1:
-                logger.info(f"Starting: train_dataset = IterableDatasetShard( : {data_loader_args}")
                 train_dataset = IterableDatasetShard(
                     train_dataset,
                     batch_size=self.args.train_batch_size,
@@ -661,7 +620,6 @@ class Trainer:
                     process_index=self.args.process_index,
                 )
 
-            logger.info(f"Starting: inside: return DataLoader : {data_loader_args}")
             return DataLoader(
                 train_dataset,
                 batch_size=self.args.train_batch_size,
@@ -670,12 +628,8 @@ class Trainer:
                 pin_memory=self.args.dataloader_pin_memory,
             )
 
-        logger.info(f"Starting: train_sampler = self._get_train_sampler()")
         train_sampler = self._get_train_sampler()
-        data_loader_args["train_sampler"] = train_sampler
 
-
-        logger.info(f"Starting: outside: return DataLoader : {data_loader_args}")
         return DataLoader(
             train_dataset,
             batch_size=self.args.train_batch_size,
@@ -813,10 +767,7 @@ class Trainer:
         Trainer's init through :obj:`optimizers`, or subclass and override this method (or :obj:`create_optimizer`
         and/or :obj:`create_scheduler`) in a subclass.
         """
-
-        logger.info(f"Starting: self.create_optimizer()")
         self.create_optimizer()
-        logger.info(f"Starting: self.create_scheduler(num_training_steps)")
         self.create_scheduler(num_training_steps)
 
     def create_optimizer(self):
@@ -1115,25 +1066,20 @@ class Trainer:
                 # will be resumed in deepspeed_init
                 pass
             else:
-                logger.info(f"Loading model to CPU to avoid an OOM error...")
                 # We load the model state dict on the CPU to avoid an OOM error.
                 state_dict = torch.load(os.path.join(resume_from_checkpoint, WEIGHTS_NAME), map_location="cpu")
                 # If the model is on the GPU, it still works!
-                logger.info(f"Starting: self._load_state_dict_in_model(state_dict)")
                 self._load_state_dict_in_model(state_dict)
 
         # If model was re-initialized, put it on the right device and update self.model_wrapped
-        logger.info(f"Starting: if model_reloaded")
         if model_reloaded:
             if self.place_model_on_device:
                 self.model = self.model.to(args.device)
             self.model_wrapped = self.model
 
-        logger.info(f"Starting: train_dataset_is_sized = isinstance(self.train_dataset, collections.abc.Sized)")
         # Keeping track whether we can can len() on the dataset or not
         train_dataset_is_sized = isinstance(self.train_dataset, collections.abc.Sized)
 
-        logger.info(f"Starting: train_dataloader = self.get_train_dataloader()")
         # Data loader and number of training steps
         train_dataloader = self.get_train_dataloader()
 
@@ -1141,7 +1087,6 @@ class Trainer:
         # number of training epochs: num_train_epochs
         # number of training steps per epoch: num_update_steps_per_epoch
         # total number of training steps to execute: max_steps
-        logger.info(f"Starting: total_train_batch_size = args.train_batch_size * args.gradient_accumulation_steps * args.world_size")
         total_train_batch_size = args.train_batch_size * args.gradient_accumulation_steps * args.world_size
         if train_dataset_is_sized:
             num_update_steps_per_epoch = len(train_dataloader) // args.gradient_accumulation_steps
@@ -1165,14 +1110,11 @@ class Trainer:
             num_update_steps_per_epoch = max_steps
             num_train_samples = args.max_steps * total_train_batch_size
 
-        logger.info(f"Starting: if DebugOption.UNDERFLOW_OVERFLOW in self.args.debug")
         if DebugOption.UNDERFLOW_OVERFLOW in self.args.debug:
             debug_overflow = DebugUnderflowOverflow(self.model)  # noqa
 
         delay_optimizer_creation = self.sharded_ddp is not None and self.sharded_ddp != ShardedDDPOption.SIMPLE
-        logger.info(f"Starting: delay_optimizer_creation = {delay_optimizer_creation}")
         if args.deepspeed:
-            logger.info(f"Starting: in if args.deepspeed")
             deepspeed_engine, optimizer, lr_scheduler = deepspeed_init(
                 self, num_training_steps=max_steps, resume_from_checkpoint=resume_from_checkpoint
             )
@@ -1182,43 +1124,28 @@ class Trainer:
             self.optimizer = optimizer
             self.lr_scheduler = lr_scheduler
         elif not delay_optimizer_creation:
-            logger.info(f"Starting: in elif not delay_optimizer_creation : self.create_optimizer_and_scheduler(num_training_steps=max_steps)")
             self.create_optimizer_and_scheduler(num_training_steps=max_steps)
 
-        logger.info(f"Starting: self.state = TrainerState()")
         self.state = TrainerState()
         self.state.is_hyper_param_search = trial is not None
 
-        logger.info(f"Starting: model = self._wrap_model(self.model_wrapped)")
         model = self._wrap_model(self.model_wrapped)
 
         # for the rest of this function `model` is the outside model, whether it was wrapped or not
-        logger.info(f"Starting: if model is not self.model")
         if model is not self.model:
             self.model_wrapped = model
 
-        logger.info(f"Starting: if delay_optimizer_creation")
         if delay_optimizer_creation:
-            logger.info(f"Starting: in if delay_optimizer_creation : self.create_optimizer_and_scheduler(num_training_steps=max_steps)")
             self.create_optimizer_and_scheduler(num_training_steps=max_steps)
 
         # Check if saved optimizer or scheduler states exist
-        logger.info(f"Starting: self._load_optimizer_and_scheduler(resume_from_checkpoint)")
         self._load_optimizer_and_scheduler(resume_from_checkpoint)
-
-        # if self.tpu_lock:
-        #     logger.info(f"Starting: releasing tpu_lock: self.tpu_lock.release()")
-        #     self.tpu_lock.release()
-        if os.path.exists(self.tpu_lock):
-            logger.info(f"Starting: releasing tpu_lock: os.remove(self.tpu_lock)")
-            os.remove(self.tpu_lock)
 
         # important: at this point:
         # self.model         is the Transformers Model
         # self.model_wrapped is DDP(Transformers Model), Deepspeed(Transformers Model), etc.
 
         # Train!
-        logger.info(f"Starting: num_examples = (")
         num_examples = (
             self.num_examples(train_dataloader) if train_dataset_is_sized else total_train_batch_size * args.max_steps
         )
@@ -1659,31 +1586,17 @@ class Trainer:
             os.path.join(checkpoint, "scheduler.pt")
         ):
             # Load in optimizer and scheduler states
-            logger.info(f"Starting: if is_torch_tpu_available()")
             if is_torch_tpu_available():
-                logger.info(f'Starting: in if is_torch_tpu_available() : optimizer_state = torch.load(os.path.join(checkpoint, "optimizer.pt"), map_location="cpu")')
-
                 # On TPU we have to take some extra precautions to properly load the states on the right device.
                 optimizer_state = torch.load(os.path.join(checkpoint, "optimizer.pt"), map_location="cpu")
-
-                logger.info(f"Starting: with warnings.catch_warnings(record=True) as caught_warnings:")
                 with warnings.catch_warnings(record=True) as caught_warnings:
-                    logger.info(f'Starting: lr_scheduler_state = torch.load(os.path.join(checkpoint, "scheduler.pt"), map_location="cpu")')
                     lr_scheduler_state = torch.load(os.path.join(checkpoint, "scheduler.pt"), map_location="cpu")
-
-                logger.info(f"Starting: reissue_pt_warnings(caught_warnings)")
                 reissue_pt_warnings(caught_warnings)
 
-                logger.info(f"Starting: xm.send_cpu_data_to_device(lr_scheduler_state, self.args.device) : {self.args.device}")
-                send_cpu_data_to_device(lr_scheduler_state, self.args.device)
+                xm.send_cpu_data_to_device(optimizer_state, self.args.device)
+                xm.send_cpu_data_to_device(lr_scheduler_state, self.args.device)
 
-                logger.info(f"Starting: xm.send_cpu_data_to_device(optimizer_state, self.args.device) : {self.args.device}")
-                send_cpu_data_to_device(optimizer_state, self.args.device)
-
-                logger.info(f"Starting: self.optimizer.load_state_dict(optimizer_state)")
                 self.optimizer.load_state_dict(optimizer_state)
-
-                logger.info(f"Starting: self.lr_scheduler.load_state_dict(lr_scheduler_state)")
                 self.lr_scheduler.load_state_dict(lr_scheduler_state)
             else:
                 map_location = "cpu" if is_sagemaker_mp_enabled() else self.args.device
