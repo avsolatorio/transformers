@@ -318,6 +318,10 @@ class DataCollatorForLanguageModeling:
         bp_wwm_ignore_num_to_predict (:obj:`bool`, `optional`, defaults to :obj:`False`):
             Controls the behaviour of DataCollatorForBPWholeWordMask. If set to :obj:`True`, length of multi-token words will
             be ignored when calculating the number of tokens to predict.
+        bp_wwm_only_alpha (:obj:`bool`, `optional`, defaults to :obj:`True`):
+            Controls the behaviour of DataCollatorForBPWholeWordMask. If set to :obj:`True`, alpha-only words will be considered
+            for whole-word masking. Example: for the word "COVID-19" the whole-word masking will only be applied to "COVID"
+            and "-" and "19" will be treated as independent tokens.
 
     .. note::
 
@@ -332,6 +336,7 @@ class DataCollatorForLanguageModeling:
     mlm_probability: float = 0.15
     pad_to_multiple_of: Optional[int] = None
     bp_wwm_ignore_num_to_predict: bool = False
+    bp_wwm_only_alpha: bool = True
 
     def __post_init__(self):
         if self.mlm and self.tokenizer.mask_token is None:
@@ -527,6 +532,10 @@ class DataCollatorForBPWholeWordMask(DataCollatorForLanguageModeling):
     def __call__(
         self, examples: List[Union[List[int], torch.Tensor, Dict[str, torch.Tensor]]]
     ) -> Dict[str, torch.Tensor]:
+
+        required_tokens = ["<s>", "<pad>", "</s>", "<unk>", "<mask>"]
+        assert all([token in self.tokenizer.vocab for token in required_tokens]), f"This data collator requires a roBERTa-like tokenizer containing the following special tokens: {required_tokens}"
+
         if isinstance(examples[0], (dict, BatchEncoding)):
             input_ids = [e["input_ids"] for e in examples]
         else:
@@ -568,7 +577,13 @@ class DataCollatorForBPWholeWordMask(DataCollatorForLanguageModeling):
             # Assume that "Ġ" indicates the beginning of a word which has a space.
             # This means that any token that does not start with "Ġ" will be treated a subword token.
             if len(cand_indexes) >= 1 and not token.startswith("Ġ"):
-                cand_indexes[-1].append(i)
+                if self.bp_wwm_only_alpha:
+                    if token.isalpha():
+                        cand_indexes[-1].append(i)
+                    else:
+                        cand_indexes.append([i])
+                else:
+                    cand_indexes[-1].append(i)
             else:
                 cand_indexes.append([i])
 
