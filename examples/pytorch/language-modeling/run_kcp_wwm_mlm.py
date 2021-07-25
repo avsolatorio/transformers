@@ -135,6 +135,9 @@ class DataTrainingArguments:
     bp_wwm_ignore_num_to_predict: bool = field(
         default=True, metadata={"help": "If True, ignore num_to_predict when multi-token word is masked."}
     )
+    bp_wwm_only_alpha: bool = field(
+        default=True, metadata={"help": "If True, only words or segments that are exclusively alpha characters are considered in the whole-word masking."}
+    )
     dataset_name: Optional[str] = field(
         default=None, metadata={"help": "The name of the dataset to use (via the datasets library)."}
     )
@@ -491,7 +494,7 @@ def main():
     gc.collect()
     gc.collect()
 
-    logger.info(f"Building DataCollatorForBPWholeWordMask: bp_wwm_ignore_num_to_predict={data_args.bp_wwm_ignore_num_to_predict}...")
+    logger.info(f"Building DataCollatorForBPWholeWordMask: bp_wwm_ignore_num_to_predict={data_args.bp_wwm_ignore_num_to_predict} bp_wwm_only_alpha={data_args.bp_wwm_only_alpha}...")
     # Data collator
     # This one will take care of randomly masking the tokens.
     pad_to_multiple_of_8 = data_args.line_by_line and training_args.fp16 and not data_args.pad_to_max_length
@@ -500,6 +503,7 @@ def main():
         mlm_probability=data_args.mlm_probability,
         pad_to_multiple_of=8 if pad_to_multiple_of_8 else None,
         bp_wwm_ignore_num_to_predict=data_args.bp_wwm_ignore_num_to_predict,
+        bp_wwm_only_alpha=data_args.bp_wwm_only_alpha,
     )
 
     logger.info("Building Trainer...")
