@@ -569,6 +569,10 @@ class DataCollatorForBPWholeWordMask(DataCollatorForLanguageModeling):
         Get 0/1 labels for masked tokens with whole word mask proxy
         """
 
+        # NOTE: REMOVE THIS WHEN RE-IMPLEMENTED BELOW!
+        if self.bp_wwm_only_alpha:
+            raise ValueError("Not implemented yet!")
+
         cand_indexes = []
         for (i, token) in enumerate(input_tokens):
             if token == "<s>" or token == "</s>":
@@ -577,13 +581,21 @@ class DataCollatorForBPWholeWordMask(DataCollatorForLanguageModeling):
             # Assume that "Ġ" indicates the beginning of a word which has a space.
             # This means that any token that does not start with "Ġ" will be treated a subword token.
             if len(cand_indexes) >= 1 and not token.startswith("Ġ"):
-                if self.bp_wwm_only_alpha:
-                    if token.isalpha():
-                        cand_indexes[-1].append(i)
-                    else:
-                        cand_indexes.append([i])
-                else:
-                    cand_indexes[-1].append(i)
+
+                # if not self.bp_wwm_only_alpha or (self.bp_wwm_only_alpha and token.isalpha()):
+                #     cand_indexes[-1].append(i)
+                # else:
+                #     cand_indexes.append([i])
+
+                cand_indexes[-1].append(i)
+
+                # if self.bp_wwm_only_alpha:
+                #     if token.isalpha():
+                #         cand_indexes[-1].append(i)
+                #     else:
+                #         cand_indexes.append([i])
+                # else:
+                #     cand_indexes[-1].append(i)
             else:
                 cand_indexes.append([i])
 
