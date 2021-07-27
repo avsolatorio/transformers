@@ -529,12 +529,21 @@ class DataCollatorForBPWholeWordMask(DataCollatorForLanguageModeling):
     - preprocesses batches for masked language modeling
     """
 
+    def __post_init__(self):
+        if self.mlm and self.tokenizer.mask_token is None:
+            raise ValueError(
+                "This tokenizer does not have a mask token which is necessary for masked language modeling. "
+                "You should pass `mlm=False` to train on causal language modeling instead."
+            )
+
+        # Add for BP whole word mask
+        print("DataCollatorForBPWholeWordMask::__post_init__")
+        required_tokens = ["<s>", "<pad>", "</s>", "<unk>", "<mask>"]
+        assert all([token in self.tokenizer.vocab for token in required_tokens]), f"This data collator requires a roBERTa-like tokenizer containing the following special tokens: {required_tokens}"
+
     def __call__(
         self, examples: List[Union[List[int], torch.Tensor, Dict[str, torch.Tensor]]]
     ) -> Dict[str, torch.Tensor]:
-
-        required_tokens = ["<s>", "<pad>", "</s>", "<unk>", "<mask>"]
-        assert all([token in self.tokenizer.vocab for token in required_tokens]), f"This data collator requires a roBERTa-like tokenizer containing the following special tokens: {required_tokens}"
 
         if isinstance(examples[0], (dict, BatchEncoding)):
             input_ids = [e["input_ids"] for e in examples]
@@ -581,21 +590,18 @@ class DataCollatorForBPWholeWordMask(DataCollatorForLanguageModeling):
             # Assume that "Ġ" indicates the beginning of a word which has a space.
             # This means that any token that does not start with "Ġ" will be treated a subword token.
             if len(cand_indexes) >= 1 and not token.startswith("Ġ"):
-
                 # if not self.bp_wwm_only_alpha or (self.bp_wwm_only_alpha and token.isalpha()):
                 #     cand_indexes[-1].append(i)
                 # else:
                 #     cand_indexes.append([i])
 
-                cand_indexes[-1].append(i)
-
-                # if self.bp_wwm_only_alpha:
-                #     if token.isalpha():
-                #         cand_indexes[-1].append(i)
-                #     else:
-                #         cand_indexes.append([i])
-                # else:
-                #     cand_indexes[-1].append(i)
+                if self.bp_wwm_only_alpha:
+                    if token.isalpha():
+                        cand_indexes[-1].append(i)
+                    else:
+                        cand_indexes.append([i])
+                else:
+                    cand_indexes[-1].append(i)
             else:
                 cand_indexes.append([i])
 
