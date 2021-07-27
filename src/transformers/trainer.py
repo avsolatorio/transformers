@@ -17,6 +17,7 @@ The Trainer class, to easily train a 🤗 Transformers from scratch or finetune 
 """
 
 import collections
+import gc
 import inspect
 import math
 import os
@@ -1604,6 +1605,13 @@ class Trainer:
 
                 self.optimizer.load_state_dict(optimizer_state)
                 self.lr_scheduler.load_state_dict(lr_scheduler_state)
+
+                # Delete since load_state_dict does a deepcopy.
+                del optimizer_state
+                del lr_scheduler_state
+                gc.collect()
+                gc.collect()
+                gc.collect()
             else:
                 map_location = "cpu" if is_sagemaker_mp_enabled() else self.args.device
                 self.optimizer.load_state_dict(
