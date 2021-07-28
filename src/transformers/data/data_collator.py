@@ -578,10 +578,6 @@ class DataCollatorForBPWholeWordMask(DataCollatorForLanguageModeling):
         Get 0/1 labels for masked tokens with whole word mask proxy
         """
 
-        # NOTE: REMOVE THIS WHEN RE-IMPLEMENTED BELOW!
-        if self.bp_wwm_only_alpha:
-            raise ValueError("Not implemented yet!")
-
         cand_indexes = []
         for (i, token) in enumerate(input_tokens):
             if token == "<s>" or token == "</s>":
