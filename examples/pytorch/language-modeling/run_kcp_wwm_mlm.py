@@ -138,6 +138,12 @@ class DataTrainingArguments:
     bp_wwm_only_alpha: bool = field(
         default=True, metadata={"help": "If True, only words or segments that are exclusively alpha characters are considered in the whole-word masking."}
     )
+    bp_wwm_min_mlm_probability: float = field(
+        default=None, metadata={"help": "Minimum ratio of tokens to mask for masked language modeling loss"}
+    )
+    bp_wwm_max_mlm_probability: float = field(
+        default=None, metadata={"help": "Maximum ratio of tokens to mask for masked language modeling loss"}
+    )
     dataset_name: Optional[str] = field(
         default=None, metadata={"help": "The name of the dataset to use (via the datasets library)."}
     )
@@ -504,6 +510,8 @@ def main():
         pad_to_multiple_of=8 if pad_to_multiple_of_8 else None,
         bp_wwm_ignore_num_to_predict=data_args.bp_wwm_ignore_num_to_predict,
         bp_wwm_only_alpha=data_args.bp_wwm_only_alpha,
+        bp_wwm_min_mlm_probability=data_args.bp_wwm_min_mlm_probability,
+        bp_wwm_max_mlm_probability=data_args.bp_wwm_max_mlm_probability,
     )
 
     logger.info("Building Trainer...")
@@ -577,6 +585,7 @@ def main():
 
 def _mp_fn(index):
     # For xla_spawn (TPUs)
+    print(index, sys.argv)
     main()
 
 

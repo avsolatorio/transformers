@@ -337,6 +337,8 @@ class DataCollatorForLanguageModeling:
     pad_to_multiple_of: Optional[int] = None
     bp_wwm_ignore_num_to_predict: bool = False
     bp_wwm_only_alpha: bool = True
+    bp_wwm_min_mlm_probability: float = None
+    bp_wwm_max_mlm_probability: float = None
 
     def __post_init__(self):
         if self.mlm and self.tokenizer.mask_token is None:
@@ -541,6 +543,13 @@ class DataCollatorForBPWholeWordMask(DataCollatorForLanguageModeling):
         required_tokens = ["<s>", "<pad>", "</s>", "<unk>", "<mask>"]
         assert all([token in self.tokenizer.vocab for token in required_tokens]), f"This data collator requires a roBERTa-like tokenizer containing the following special tokens: {required_tokens}"
 
+        assert type(self.bp_wwm_min_mlm_probability) == type(self.bp_wwm_max_mlm_probability)
+        self.is_range_mlm_probability = False
+        if self.bp_wwm_min_mlm_probability is not None:
+            self.is_range_mlm_probability = True
+
+        print(f"DataCollatorForBPWholeWordMask:: mlm_probability: is_range_mlm_probability={self.is_range_mlm_probability}, bp_wwm_min_mlm_probability={self.bp_wwm_min_mlm_probability}, bp_wwm_max_mlm_probability={self.bp_wwm_max_mlm_probability}, mlm_probability={self.mlm_probability}")
+
     def __call__(
         self, examples: List[Union[List[int], torch.Tensor, Dict[str, torch.Tensor]]]
     ) -> Dict[str, torch.Tensor]:
@@ -601,8 +610,13 @@ class DataCollatorForBPWholeWordMask(DataCollatorForLanguageModeling):
             else:
                 cand_indexes.append([i])
 
+        if self.is_range_mlm_probability:
+            mlm_probability = random.uniform(self.bp_wwm_min_mlm_probability, self.bp_wwm_max_mlm_probability)
+        else:
+            mlm_probability = self.mlm_probability
+
         random.shuffle(cand_indexes)
-        num_to_predict = min(max_predictions, max(1, int(round(len(input_tokens) * self.mlm_probability))))
+        num_to_predict = min(max_predictions, max(1, int(round(len(input_tokens) * mlm_probability))))
         masked_lms = []
         covered_indexes = set()
         for index_set in cand_indexes:
